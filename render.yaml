@@ -5,6 +5,8 @@ services:
     plan: free
     region: singapore
 
+    preDeployCommand: php artisan migrate --force
+
     envVars:
       - key: APP_ENV
         value: production
@@ -27,4 +29,3 @@ databases:
   - name: employee-management-db
     plan: free
     region: singapore
-    
