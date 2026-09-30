@@ -1,14 +1,12 @@
 # -------------------------------------------------
-# Stage 1: Install Composer dependencies
+# Stage 1: Composer dependencies
 # -------------------------------------------------
 FROM composer:2 AS composer
 
 WORKDIR /app
 
-# Copy Laravel project first
 COPY . .
 
-# Install PHP dependencies
 RUN composer install \
     --no-dev \
     --no-interaction \
@@ -35,11 +33,32 @@ RUN npm run build
 
 
 # -------------------------------------------------
-# Stage 3: Laravel + Nginx + PHP-FPM
+# Stage 3: PHP 8.3 + Nginx
 # -------------------------------------------------
-FROM richarvey/nginx-php-fpm:3.1.6
+FROM php:8.3-fpm-alpine
 
 WORKDIR /var/www/html
+
+# Install required system packages
+RUN apk add --no-cache \
+    nginx \
+    postgresql-dev \
+    oniguruma-dev \
+    libxml2-dev \
+    zip \
+    libzip-dev \
+    icu-dev \
+    bash
+
+# Install PHP extensions required by Laravel/PostgreSQL
+RUN docker-php-ext-install \
+    pdo \
+    pdo_pgsql \
+    mbstring \
+    xml \
+    bcmath \
+    intl \
+    opcache
 
 # Copy Laravel application
 COPY . .
@@ -47,20 +66,29 @@ COPY . .
 # Copy Composer dependencies
 COPY --from=composer /app/vendor ./vendor
 
-# Copy compiled Vite assets
+# Copy Vite build
 COPY --from=frontend /app/public/build ./public/build
 
-# Laravel configuration
-ENV SKIP_COMPOSER=1
-ENV WEBROOT=/var/www/html/public
-ENV PHP_ERRORS_STDERR=1
-ENV REAL_IP_HEADER=1
-
-# Production configuration
+# Laravel production settings
 ENV APP_ENV=production
 ENV APP_DEBUG=false
 ENV LOG_CHANNEL=stderr
 
-ENV COMPOSER_ALLOW_SUPERUSER=1
+ENV WEBROOT=/var/www/html/public
+
+# Permissions
+RUN chown -R www-data:www-data \
+    storage \
+    bootstrap/cache
+
+# Nginx configuration
+COPY docker/nginx.conf /etc/nginx/http.d/default.conf
+
+# Start script
+COPY docker/start.sh /start.sh
+
+RUN chmod +x /start.sh
+
+EXPOSE 10000
 
 CMD ["/start.sh"]
